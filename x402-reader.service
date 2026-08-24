@@ -1,0 +1,19 @@
+[Unit]
+Description=x402-reader scrape 402 (loopback :4030)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/twzrd/x402-reader
+ExecStartPre=/bin/sh -c 'grep -qx PORT=4030 /home/twzrd/x402-reader/.env && grep -qx HOST=127.0.0.1 /home/twzrd/x402-reader/.env && grep -qx EVM_NETWORK=eip155:8453 /home/twzrd/x402-reader/.env && ! grep -q 4024 /home/twzrd/x402-reader/.env && ! grep -viE "^PUBLIC_BASE_URL=" /home/twzrd/x402-reader/.env | grep -qi outbid'
+ExecStart=/home/twzrd/.nvm/versions/node/v24.19.0/bin/node --env-file=/home/twzrd/x402-reader/.env /home/twzrd/x402-reader/src/server.js
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=x402-reader
+
+[Install]
+WantedBy=default.target
