@@ -4,7 +4,7 @@ import http from "node:http";
 import { test } from "node:test";
 import { MAX_BYTES, scrapeUrl, toMarkdown } from "../src/scrape.js";
 import { assertPublicHttpUrl } from "../src/ssrf.js";
-import { app, handleScrape, mount, sendErr, upgradePaymentHeader, CAIP_NET } from "../src/server.js";
+import { app, handleScrape, mount, sendErr, upgradePaymentHeader, CAIP_NET, scrapeDiscovery, READER_SERVICE_NAME, READER_TAGS } from "../src/server.js";
 
 const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
 const ARTICLE = `<!doctype html><html><head><title>Doc</title></head><body><article><h1>Doc</h1><p>${words}</p></article></body></html>`;
@@ -40,6 +40,16 @@ test("pipeline: article markdown; SPA 422 needs_browser; size/timeout; SSRF; HTT
   assert.equal((await get("/health")).body.service, "x402-reader");
   assert.equal((await get("/scrape?url=http://127.0.0.1/")).status, 400);
   await new Promise((r) => srv.close(r));
+});
+
+test("Coinbase Bazaar metadata describes the paid scrape", () => {
+  const discovery = scrapeDiscovery();
+  assert.equal(READER_SERVICE_NAME, "x402 Reader");
+  assert.deepEqual(READER_TAGS, ["web", "scrape", "markdown", "agents", "x402"]);
+  assert.deepEqual(discovery.outputSchema.input, {
+    type: "http", method: "GET", queryParams: { url: "https://example.com/article" },
+  });
+  assert.equal(discovery.extensions.bazaar.info.input.queryParams.url, "https://example.com/article");
 });
 
 test("upgradePaymentHeader: v1 solana + extra.memo becomes v2 CAIP accepted", () => {

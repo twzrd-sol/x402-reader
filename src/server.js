@@ -1,10 +1,14 @@
 import { fileURLToPath } from "node:url";
 import express from "express";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { scrapeUrl } from "./scrape.js";
+import { facilitatorConfig } from "./cdp-auth.js";
 
 const PORT = Number(process.env.PORT || 4030);
 const HOST = process.env.HOST || "127.0.0.1";
 const PRICE = "$0.005";
+export const READER_SERVICE_NAME = "x402 Reader";
+export const READER_TAGS = ["web", "scrape", "markdown", "agents", "x402"];
 const EVM_NET = "eip155:8453";
 const SVM_NET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const LEGACY_NET = { [EVM_NET]: "base", [SVM_NET]: "solana" };
@@ -12,6 +16,24 @@ export const CAIP_NET = Object.fromEntries(Object.entries(LEGACY_NET).map(([k, v
 const wireQuotes = new Map();
 export const app = express();
 app.set("trust proxy", 1);
+
+const SCRAPE_INPUT = { type: "http", method: "GET", queryParams: { url: "https://example.com/article" } };
+const SCRAPE_OUTPUT = { ok: true, title: "Example article", content: "# Example article", markdown: "# Example article", word_count: 2 };
+
+export function scrapeDiscovery() {
+  return {
+    extensions: declareDiscoveryExtension({
+      method: "GET",
+      input: SCRAPE_INPUT.queryParams,
+      inputSchema: {
+        properties: { url: { type: "string", format: "uri", description: "Public http(s) URL to convert to markdown" } },
+        required: ["url"], additionalProperties: false,
+      },
+      output: { example: SCRAPE_OUTPUT },
+    }),
+    outputSchema: { input: SCRAPE_INPUT, output: SCRAPE_OUTPUT },
+  };
+}
 
 export function quoteKey(req) {
   return `${req.ip || ""}:${req.originalUrl || req.url || req.path || ""}`;
@@ -36,7 +58,7 @@ export function upgradePaymentHeader(raw, advertised) {
   return Buffer.from(JSON.stringify(out)).toString("base64");
 }
 
-export function v1Invoice(hdrB64, resource) {
+export function v1Invoice(hdrB64, resource, outputSchema) {
   const dec = JSON.parse(Buffer.from(String(hdrB64), "base64").toString());
   const pub = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
   const resUrl = pub && String(resource || "").startsWith("/") ? pub + resource : (dec.resource?.url || resource);
@@ -54,6 +76,7 @@ export function v1Invoice(hdrB64, resource) {
       maxTimeoutSeconds: a.maxTimeoutSeconds,
       asset: a.asset,
       extra: a.extra,
+      ...(outputSchema ? { outputSchema } : {}),
     })),
   };
 }
@@ -88,7 +111,7 @@ export async function mount(env = process.env) {
         if (res.statusCode === 402 && (!body || !body.accepts)) {
           const hdr = res.get("PAYMENT-REQUIRED");
           if (hdr) {
-            try { body = v1Invoice(hdr, req.originalUrl); } catch { /* keep {} */ }
+            try { body = v1Invoice(hdr, req.originalUrl, scrapeDiscovery().outputSchema); } catch { /* keep {} */ }
             try {
               const dec = JSON.parse(Buffer.from(String(hdr), "base64").toString());
               wireQuotes.set(quoteKey(req), dec.accepts || []);
@@ -115,10 +138,17 @@ export async function mount(env = process.env) {
     const [{ paymentMiddleware, x402ResourceServer }, { HTTPFacilitatorClient }, { ExactEvmScheme }, { ExactSvmScheme }] = await Promise.all([
       import("@x402/express"), import("@x402/core/server"), import("@x402/evm/exact/server"), import("@x402/svm/exact/server"),
     ]);
-    const rs = new x402ResourceServer(new HTTPFacilitatorClient({ url: env.FACILITATOR_URL || "https://facilitator.payai.network" }));
+    const rs = new x402ResourceServer(new HTTPFacilitatorClient(facilitatorConfig(env)));
     if (env.EVM_ADDRESS) rs.register(env.EVM_NETWORK || EVM_NET, new ExactEvmScheme());
     if (env.SVM_ADDRESS) rs.register(env.SVM_NETWORK || SVM_NET, new ExactSvmScheme());
-    const spec = { accepts, mimeType: "application/json", description: "HTML to markdown. $0.005 USDC." };
+    const spec = {
+      accepts,
+      mimeType: "application/json",
+      description: "HTML to markdown. $0.005 USDC.",
+      serviceName: READER_SERVICE_NAME,
+      tags: READER_TAGS,
+      ...scrapeDiscovery(),
+    };
     app.use(paymentMiddleware({ "GET /scrape": spec, "GET /content/extract": spec }, rs));
   }
   app.get("/health", (_req, res) => res.json({ ok: true, service: "x402-reader", paywall: accepts.length > 0 }));
