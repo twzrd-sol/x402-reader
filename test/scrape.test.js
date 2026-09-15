@@ -82,3 +82,31 @@ test("upgradePaymentHeader: v1 solana + extra.memo becomes v2 CAIP accepted", ()
   assert.equal(out.payload.transaction, "dGVzdA==");
   assert.equal(CAIP_NET.solana, advertised[0].network);
 });
+
+test("upgradePaymentHeader preserves a native v2 Bazaar payment byte-for-byte", () => {
+  const advertised = [{
+    scheme: "exact",
+    network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+    payTo: "F1AbWuXJcBT9arW9wc6Xr2vom5NBtngWsz6Ht16jRBLM",
+    asset: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    amount: "5000",
+    extra: { feePayer: "fee-payer" },
+  }];
+  const payment = {
+    x402Version: 2,
+    resource: {
+      url: "https://reader.outbid.sh/scrape?url=https%3A%2F%2Fexample.com",
+      serviceName: "x402 Reader",
+      tags: ["web", "scrape", "markdown", "agents", "x402"],
+    },
+    accepted: advertised[0],
+    payload: { transaction: "dGVzdA==" },
+    extensions: { bazaar: { info: { input: { type: "http", method: "GET" } } } },
+  };
+  const raw = Buffer.from(JSON.stringify(payment)).toString("base64");
+
+  assert.equal(upgradePaymentHeader(raw, advertised), raw);
+  const decoded = JSON.parse(Buffer.from(upgradePaymentHeader(raw, advertised), "base64").toString());
+  assert.deepEqual(decoded.resource, payment.resource);
+  assert.deepEqual(decoded.extensions, payment.extensions);
+});

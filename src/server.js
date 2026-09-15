@@ -44,6 +44,9 @@ export function upgradePaymentHeader(raw, advertised) {
   if (!raw) return raw;
   let p;
   try { p = JSON.parse(Buffer.from(String(raw), "base64").toString()); } catch { return raw; }
+  // Native v2 clients already echo ResourceInfo and extensions. Rebuilding
+  // their envelope would strip Bazaar metadata before facilitator processing.
+  if (p.x402Version === 2) return raw;
   const acc = p.accepted || p;
   const payTo = acc.payTo;
   const scheme = acc.scheme || p.scheme || "exact";
@@ -53,7 +56,13 @@ export function upgradePaymentHeader(raw, advertised) {
   if (acc.extra && typeof acc.extra.memo === "string") extra.memo = acc.extra.memo;
   const accepted = { ...match, extra };
   const out = p.payload
-    ? { x402Version: 2, accepted, payload: p.payload }
+    ? {
+        x402Version: 2,
+        accepted,
+        payload: p.payload,
+        ...(p.resource !== undefined ? { resource: p.resource } : {}),
+        ...(p.extensions !== undefined ? { extensions: p.extensions } : {}),
+      }
     : { ...p, x402Version: 2, accepted };
   return Buffer.from(JSON.stringify(out)).toString("base64");
 }
