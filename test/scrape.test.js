@@ -4,7 +4,7 @@ import http from "node:http";
 import { test } from "node:test";
 import { MAX_BYTES, scrapeUrl, toMarkdown } from "../src/scrape.js";
 import { assertPublicHttpUrl } from "../src/ssrf.js";
-import { app, handleScrape, mount, sendErr, upgradePaymentHeader, CAIP_NET, scrapeDiscovery, READER_SERVICE_NAME, READER_TAGS } from "../src/server.js";
+import { app, handleScrape, mount, sendErr, normalizePaymentHeaders, upgradePaymentHeader, CAIP_NET, scrapeDiscovery, READER_SERVICE_NAME, READER_TAGS } from "../src/server.js";
 
 const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
 const ARTICLE = `<!doctype html><html><head><title>Doc</title></head><body><article><h1>Doc</h1><p>${words}</p></article></body></html>`;
@@ -109,4 +109,9 @@ test("upgradePaymentHeader preserves a native v2 Bazaar payment byte-for-byte", 
   const decoded = JSON.parse(Buffer.from(upgradePaymentHeader(raw, advertised), "base64").toString());
   assert.deepEqual(decoded.resource, payment.resource);
   assert.deepEqual(decoded.extensions, payment.extensions);
+
+  const headers = { "x-payment": raw };
+  assert.equal(normalizePaymentHeaders(headers, advertised), true);
+  assert.equal(headers["payment-signature"], raw);
+  assert.equal(headers["x-payment"], undefined);
 });

@@ -67,6 +67,15 @@ export function upgradePaymentHeader(raw, advertised) {
   return Buffer.from(JSON.stringify(out)).toString("base64");
 }
 
+/** Normalize the transport header even when a native v2 payload needs no rewrite. */
+export function normalizePaymentHeaders(headers, advertised) {
+  const raw = headers?.["payment-signature"] || headers?.["x-payment"];
+  if (!raw) return false;
+  headers["payment-signature"] = upgradePaymentHeader(raw, advertised);
+  delete headers["x-payment"];
+  return true;
+}
+
 export function v1Invoice(hdrB64, resource, outputSchema) {
   const dec = JSON.parse(Buffer.from(String(hdrB64), "base64").toString());
   const pub = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
@@ -133,14 +142,9 @@ export async function mount(env = process.env) {
     });
     app.use((req, _res, next) => {
       if (req.path !== "/scrape" && req.path !== "/content/extract") return next();
-      const raw = req.headers["payment-signature"] || req.headers["x-payment"];
-      if (!raw) return next();
+      if (!req.headers["payment-signature"] && !req.headers["x-payment"]) return next();
       try {
-        const upgraded = upgradePaymentHeader(raw, wireQuotes.get(quoteKey(req)) || []);
-        if (upgraded !== raw) {
-          req.headers["payment-signature"] = upgraded;
-          delete req.headers["x-payment"];
-        }
+        normalizePaymentHeaders(req.headers, wireQuotes.get(quoteKey(req)) || []);
       } catch { /* malformed: let middleware reject */ }
       next();
     });
