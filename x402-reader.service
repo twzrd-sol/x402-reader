@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/twzrd/x402-reader
-ExecStartPre=/bin/sh -c 'grep -qx PORT=4030 /home/twzrd/x402-reader/.env && grep -qx HOST=127.0.0.1 /home/twzrd/x402-reader/.env && grep -qx EVM_NETWORK=eip155:8453 /home/twzrd/x402-reader/.env && grep -qx FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402 /home/twzrd/x402-reader/.env && grep -q ^COINBASE_API_KEY=.. /home/twzrd/x402-reader/.env && grep -q ^COINBASE_API_KEY_SECRET=.. /home/twzrd/x402-reader/.env && ! grep -q 4024 /home/twzrd/x402-reader/.env && ! grep -viE "^PUBLIC_BASE_URL=" /home/twzrd/x402-reader/.env | grep -qi outbid'
-ExecStart=/home/twzrd/.nvm/versions/node/v24.19.0/bin/node --env-file=/home/twzrd/x402-reader/.env /home/twzrd/x402-reader/src/server.js
+WorkingDirectory=%h/x402-reader
+ExecStartPre=/bin/sh -c 'grep -qx PORT=4030 %h/x402-reader/.env && grep -qx HOST=127.0.0.1 %h/x402-reader/.env && grep -qx EVM_NETWORK=eip155:8453 %h/x402-reader/.env && grep -qx FACILITATOR_URL=https://api.cdp.coinbase.com/platform/v2/x402 %h/x402-reader/.env && grep -q ^COINBASE_API_KEY=.. %h/x402-reader/.env && grep -q ^COINBASE_API_KEY_SECRET=.. %h/x402-reader/.env && ! grep -q 4024 %h/x402-reader/.env && ! grep -viE "^PUBLIC_BASE_URL=" %h/x402-reader/.env | grep -qi outbid'
+ExecStart=%h/.nvm/versions/node/v24.19.0/bin/node --env-file=%h/x402-reader/.env %h/x402-reader/src/server.js
 Restart=on-failure
 RestartSec=3s
 TimeoutStopSec=10s
